@@ -1,4 +1,3 @@
-```markdown
 # HJS Go SDK
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/hjs-protocol/sdk-go)](https://pkg.go.dev/github.com/hjs-protocol/sdk-go)
