@@ -1,17 +1,17 @@
-# HJS Go SDK
+# JEP Go SDK
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/hjs-protocol/sdk-go)](https://pkg.go.dev/github.com/hjs-protocol/sdk-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/hjs-protocol/sdk-go)](https://golang.org)
 
-Go SDK for [HJS: A Judgment Event Protocol](https://github.com/hjs-protocol/spec).
+Go SDK for [JEP: A Judgment Event Protocol](https://github.com/hjs-protocol/spec).
 
 Implements all 4 core primitives: **Judgment**, **Delegation**, **Termination**, **Verification**.
 
 ## 📦 Installation
 
 ```bash
-go get github.com/hjs-protocol/sdk-go
+go get github.com/jep-protocol/sdk-go
 ```
 
 ## 🚀 Quick Start
@@ -22,12 +22,12 @@ package main
 import (
     "fmt"
     "log"
-    "github.com/hjs-protocol/sdk-go"
+    "github.com/jep-protocol/sdk-go"
 )
 
 func main() {
     // Create client with API key
-    client := hjs.NewClient("your-api-key")
+    client := jep.NewClient("your-api-key")
 
     // 1. Record a judgment
     judgment, err := client.Judgment(&hjs.JudgmentRequest{
@@ -43,7 +43,7 @@ func main() {
     fmt.Printf("✅ Judgment recorded: %s\n", judgment.ID)
 
     // 2. Create a delegation
-    delegation, err := client.Delegation(&hjs.DelegationRequest{
+    delegation, err := client.Delegation(&jep.DelegationRequest{
         Delegator: "manager@company.com",
         Delegatee: "employee@company.com",
         Scope: map[string]interface{}{
@@ -69,11 +69,11 @@ func main() {
 ### Creating a Client
 
 ```go
-// Create client with default settings (https://api.hjs.sh)
-client := hjs.NewClient("your-api-key")
+// Create client with default settings (https://api.jep.sh)
+client := jep.NewClient("your-api-key")
 
 // Create client with custom base URL
-client := hjs.NewClientWithURL("https://your-hjs-instance.com", "your-api-key")
+client := jep.NewClientWithURL("https://your-jep-instance.com", "your-api-key")
 ```
 
 ### Core Primitives
@@ -81,7 +81,7 @@ client := hjs.NewClientWithURL("https://your-hjs-instance.com", "your-api-key")
 #### 1. Judgment — Record structured decisions
 
 ```go
-resp, err := client.Judgment(&hjs.JudgmentRequest{
+resp, err := client.Judgment(&jep.JudgmentRequest{
     Entity: "user@example.com",           // Required: who is making the judgment
     Action: "approve",                     // Required: what action
     Scope: map[string]interface{}{         // Optional: additional context
@@ -107,7 +107,7 @@ type JudgmentResponse struct {
 #### 2. Delegation — Transfer authority
 
 ```go
-resp, err := client.Delegation(&hjs.DelegationRequest{
+resp, err := client.Delegation(&jep.DelegationRequest{
     Delegator:  "manager@company.com",     // Required: who delegates
     Delegatee:  "employee@company.com",    // Required: who receives
     JudgmentID: "jgd_xxx",                  // Optional: linked judgment
@@ -133,7 +133,7 @@ resp, err := client.Termination(&hjs.TerminationRequest{
 
 ```go
 // Detailed verification
-resp, err := client.Verification(&hjs.VerificationRequest{
+resp, err := client.Verification(&jep.VerificationRequest{
     Verifier:   "auditor@company.com",
     TargetID:   "dlg_1234567890abcd",
     TargetType: "delegation",  // "judgment", "delegation", or "termination"
@@ -152,7 +152,7 @@ delegation, err := client.GetDelegation("dlg_xxx")
 termination, err := client.GetTermination("trm_xxx")
 
 // List with filters
-judgments, err := client.ListJudgments(&hjs.ListJudgmentsParams{
+judgments, err := client.ListJudgments(&jep.ListJudgmentsParams{
     Entity: "user@example.com",
     Page:   1,
     Limit:  20,
@@ -176,7 +176,7 @@ key, err := client.GenerateKey("user@example.com", "my-app")
 
 ```bash
 # Clone the repository
-git clone https://github.com/hjs-protocol/sdk-go.git
+git clone https://github.com/jep-protocol/sdk-go.git
 cd sdk-go
 
 # Run tests
@@ -189,15 +189,15 @@ go run examples/main.go
 ## ❌ Error Handling
 
 ```go
-resp, err := client.Judgment(&hjs.JudgmentRequest{
+resp, err := client.Judgment(&jep.JudgmentRequest{
     Entity: "user@example.com",
     Action: "approve",
 })
 if err != nil {
     switch e := err.(type) {
-    case *hjs.APIError:
+    case *jep.APIError:
         fmt.Printf("API error: %s (status: %d)\n", e.Message, e.StatusCode)
-    case *hjs.ValidationError:
+    case *jep.ValidationError:
         fmt.Printf("Validation error: %s\n", e.Message)
     default:
         fmt.Printf("Unexpected error: %v\n", e)
@@ -208,12 +208,12 @@ if err != nil {
 
 ## 🔗 Related Repositories
 
-- [Protocol Specification](https://github.com/hjs-protocol/spec)
-- [Core Implementation (Rust)](https://github.com/hjs-protocol/core)
-- [API Service](https://github.com/hjs-protocol/api)
-- [Python SDK](https://github.com/hjs-protocol/sdk-py)
-- [JavaScript SDK](https://github.com/hjs-protocol/sdk-js)
-- [CLI Tool](https://github.com/hjs-protocol/cli)
+- [Protocol Specification](https://github.com/jep-protocol/spec)
+- [Core Implementation (Rust)](https://github.com/jep-protocol/core)
+- [API Service](https://github.com/jep-protocol/api)
+- [Python SDK](https://github.com/jep-protocol/sdk-py)
+- [JavaScript SDK](https://github.com/jep-protocol/sdk-js)
+- [CLI Tool](https://github.com/jep-protocol/cli)
 
 ## 📄 License
 
