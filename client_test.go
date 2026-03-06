@@ -1,4 +1,4 @@
-package hjs
+package jep // 已同步更名为 jep
 
 import (
 	"testing"
@@ -19,7 +19,7 @@ func TestJudgmentValidation(t *testing.T) {
 
 	// Test missing entity
 	_, err := client.Judgment(&JudgmentRequest{
-		Action: "test",
+		Action: "jep_compliance_test", // 语义化动作名
 	})
 	if err == nil {
 		t.Error("Expected error for missing entity, got nil")
@@ -27,7 +27,7 @@ func TestJudgmentValidation(t *testing.T) {
 
 	// Test missing action
 	_, err = client.Judgment(&JudgmentRequest{
-		Entity: "test",
+		Entity: "tester@jep-protocol.org",
 	})
 	if err == nil {
 		t.Error("Expected error for missing action, got nil")
@@ -39,7 +39,7 @@ func TestDelegationValidation(t *testing.T) {
 
 	// Test missing delegator
 	_, err := client.Delegation(&DelegationRequest{
-		Delegatee: "test",
+		Delegatee: "delegatee@example.com",
 	})
 	if err == nil {
 		t.Error("Expected error for missing delegator, got nil")
@@ -47,7 +47,7 @@ func TestDelegationValidation(t *testing.T) {
 
 	// Test missing delegatee
 	_, err = client.Delegation(&DelegationRequest{
-		Delegator: "test",
+		Delegator: "delegator@example.com",
 	})
 	if err == nil {
 		t.Error("Expected error for missing delegatee, got nil")
@@ -59,7 +59,7 @@ func TestTerminationValidation(t *testing.T) {
 
 	// Test missing terminator
 	_, err := client.Termination(&TerminationRequest{
-		TargetID:   "test",
+		TargetID:   "jep_12345", // 使用 jep_ 前缀示例
 		TargetType: "judgment",
 	})
 	if err == nil {
@@ -68,8 +68,8 @@ func TestTerminationValidation(t *testing.T) {
 
 	// Test invalid target type
 	_, err = client.Termination(&TerminationRequest{
-		Terminator: "test",
-		TargetID:   "test",
+		Terminator: "admin@jep-protocol.org",
+		TargetID:   "jep_12345",
 		TargetType: "invalid",
 	})
 	if err == nil {
@@ -82,7 +82,7 @@ func TestVerificationValidation(t *testing.T) {
 
 	// Test missing verifier
 	_, err := client.Verification(&VerificationRequest{
-		TargetID:   "test",
+		TargetID:   "jep_12345",
 		TargetType: "judgment",
 	})
 	if err == nil {
