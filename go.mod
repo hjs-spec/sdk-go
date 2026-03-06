@@ -1,2 +1,2 @@
-module github.com/hjs-protocol/sdk-go
+module github.com/jep-protocol/sdk-go
 go 1.21
