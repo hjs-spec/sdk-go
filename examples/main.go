@@ -3,16 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
-	"github.com/hjs-protocol/sdk-go"
+	"github.com/jep-protocol/sdk-go"
 )
 
 func main() {
 	// Create client
-	client := hjs.NewClient("your-api-key")
+	client := jep.NewClient("your-api-key")
 
 	// 1. Record a judgment
 	fmt.Println("📝 Recording judgment...")
-	judgment, err := client.Judgment(&hjs.JudgmentRequest{
+	judgment, err := client.Judgment(&jep.JudgmentRequest{
 		Entity: "alice@bank.com",
 		Action: "loan_approved",
 		Scope: map[string]interface{}{
@@ -27,7 +27,7 @@ func main() {
 
 	// 2. Create a delegation
 	fmt.Println("\n📝 Creating delegation...")
-	delegation, err := client.Delegation(&hjs.DelegationRequest{
+	delegation, err := client.Delegation(&jep.DelegationRequest{
 		Delegator: "manager@company.com",
 		Delegatee: "employee@company.com",
 		JudgmentID: judgment.ID,
@@ -50,7 +50,7 @@ func main() {
 
 	// 4. List judgments
 	fmt.Println("\n📋 Listing judgments...")
-	list, err := client.ListJudgments(&hjs.ListJudgmentsParams{
+	list, err := client.ListJudgments(&jep.ListJudgmentsParams{
 		Limit: 10,
 	})
 	if err != nil {
