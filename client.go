@@ -1,5 +1,12 @@
-// Package jep provides a Go client for the JEP Protocol API (Judgment Event Protocol)
-// IETF Draft: draft-wang-jep-judgment-event-00
+// Package jep provides a Go SDK for the JEP v0.6 API seed.
+//
+// It is aligned with the JEP v0.6 event API shape:
+//
+//	POST /events/create
+//	POST /events/verify
+//
+// This SDK is an implementation seed. It does not define new JEP-Core
+// semantics and does not perform legal, factual, or compliance validation.
 package jep
 
 import (
@@ -8,24 +15,32 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// Constants
 const (
-	// DefaultBaseURL 指向 JEP 官方 API 节点
-	DefaultBaseURL = "https://api.jep-protocol.org"
+	DefaultBaseURL = "http://127.0.0.1:8000"
 	DefaultTimeout = 30 * time.Second
+	JEPWireVersion = "1"
+	JEPCoreProfile = "jep-core-0.6"
 )
 
-// Client for JEP API
+type Verb string
+
+const (
+	VerbJudgment     Verb = "J"
+	VerbDelegation   Verb = "D"
+	VerbTermination  Verb = "T"
+	VerbVerification Verb = "V"
+)
+
 type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
 }
 
-// NewClient creates a new JEP client with default settings
 func NewClient(apiKey string) *Client {
 	return &Client{
 		baseURL:    DefaultBaseURL,
@@ -34,159 +49,227 @@ func NewClient(apiKey string) *Client {
 	}
 }
 
-// NewClientWithURL creates a new JEP client with custom base URL
 func NewClientWithURL(baseURL, apiKey string) *Client {
 	return &Client{
-		baseURL:    baseURL,
+		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
 		httpClient: &http.Client{Timeout: DefaultTimeout},
 	}
 }
 
-// SetTimeout sets custom timeout for HTTP client
 func (c *Client) SetTimeout(timeout time.Duration) {
 	c.httpClient.Timeout = timeout
 }
 
-// doRequest performs an HTTP request and handles response
-func (c *Client) doRequest(method, path string, body interface{}) (*http.Response, error) {
-	url := c.baseURL + path
+func (c *Client) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		c.httpClient = client
+	}
+}
+
+type JEPEvent struct {
+	JEP     string                 `json:"jep"`
+	Verb    Verb                   `json:"verb"`
+	Who     string                 `json:"who"`
+	When    int64                  `json:"when"`
+	What    interface{}            `json:"what,omitempty"`
+	Nonce   string                 `json:"nonce"`
+	Aud     string                 `json:"aud,omitempty"`
+	Ref     *string                `json:"ref,omitempty"`
+	Ext     map[string]interface{} `json:"ext,omitempty"`
+	ExtCrit []string               `json:"ext_crit,omitempty"`
+	Sig     string                 `json:"sig,omitempty"`
+}
+
+type CreateEventRequest struct {
+	Verb          Verb                   `json:"verb"`
+	Who           string                 `json:"who,omitempty"`
+	What          interface{}            `json:"what"`
+	Aud           string                 `json:"aud,omitempty"`
+	Ref           *string                `json:"ref,omitempty"`
+	TTLMinutes    *int                   `json:"ttl_minutes,omitempty"`
+	DigestOnlyWho bool                   `json:"digest_only_who,omitempty"`
+	Ext           map[string]interface{} `json:"ext,omitempty"`
+	ExtCrit       []string               `json:"ext_crit,omitempty"`
+}
+
+type EventResponse struct {
+	Event      JEPEvent         `json:"event"`
+	EventHash  string           `json:"event_hash"`
+	Validation ValidationResult `json:"validation"`
+}
+
+type VerifyEventRequest struct {
+	Event        JEPEvent `json:"event"`
+	Mode         string   `json:"mode,omitempty"`
+	ConsumeNonce bool     `json:"consume_nonce,omitempty"`
+}
+
+type ValidationResult struct {
+	Valid     bool                     `json:"valid"`
+	Level     int                      `json:"level"`
+	Mode      string                   `json:"mode"`
+	Profile   string                   `json:"profile"`
+	Scopes    []string                 `json:"scopes,omitempty"`
+	EventHash string                   `json:"event_hash,omitempty"`
+	Warnings  []map[string]interface{} `json:"warnings,omitempty"`
+	Errors    []map[string]interface{} `json:"errors,omitempty"`
+}
+
+type HealthResponse struct {
+	OK      bool   `json:"ok"`
+	Profile string `json:"profile"`
+}
+
+func (c *Client) CreateEvent(req *CreateEventRequest) (*EventResponse, error) {
+	if req == nil {
+		return nil, &ValidationError{Message: "request is required"}
+	}
+	if err := validateVerb(req.Verb); err != nil {
+		return nil, err
+	}
+	if req.What == nil {
+		return nil, &ValidationError{Message: "what is required"}
+	}
+
+	var result EventResponse
+	if err := c.doJSON(http.MethodPost, "/events/create", req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) VerifyEvent(req *VerifyEventRequest) (*ValidationResult, error) {
+	if req == nil {
+		return nil, &ValidationError{Message: "request is required"}
+	}
+	if req.Event.JEP == "" {
+		return nil, &ValidationError{Message: "event is required"}
+	}
+	var result ValidationResult
+	if err := c.doJSON(http.MethodPost, "/events/verify", req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) Health() (*HealthResponse, error) {
+	var result HealthResponse
+	if err := c.doJSON(http.MethodGet, "/health", nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Convenience helpers for JEP primitives.
+
+func (c *Client) Judgment(who string, what interface{}) (*EventResponse, error) {
+	return c.CreateEvent(&CreateEventRequest{
+		Verb: VerbJudgment,
+		Who:  who,
+		What: what,
+	})
+}
+
+func (c *Client) Delegation(who string, what interface{}) (*EventResponse, error) {
+	return c.CreateEvent(&CreateEventRequest{
+		Verb: VerbDelegation,
+		Who:  who,
+		What: what,
+	})
+}
+
+func (c *Client) Termination(who string, what interface{}, ref *string) (*EventResponse, error) {
+	return c.CreateEvent(&CreateEventRequest{
+		Verb: VerbTermination,
+		Who:  who,
+		What: what,
+		Ref:  ref,
+	})
+}
+
+func (c *Client) Verification(who string, what interface{}, ref string) (*EventResponse, error) {
+	return c.CreateEvent(&CreateEventRequest{
+		Verb: VerbVerification,
+		Who:  who,
+		What: what,
+		Ref:  &ref,
+	})
+}
+
+func (c *Client) doJSON(method, path string, body interface{}, out interface{}) error {
+	url := strings.TrimRight(c.baseURL, "/") + path
 
 	var reqBody io.Reader
 	if body != nil {
-		jsonData, err := json.Marshal(body)
+		data, err := json.Marshal(body)
 		if err != nil {
-			return nil, &ValidationError{Message: fmt.Sprintf("failed to marshal request: %v", err)}
+			return &ValidationError{Message: fmt.Sprintf("failed to marshal request: %v", err)}
 		}
-		reqBody = bytes.NewReader(jsonData)
+		reqBody = bytes.NewReader(data)
 	}
 
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// 更新 User-Agent 标识
-	req.Header.Set("User-Agent", "JEP-Go-SDK/1.0.0")
+	req.Header.Set("User-Agent", "JEP-Go-SDK/0.6.0")
 	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return resp, nil
-}
-
-// handleResponse processes the HTTP response and returns decoded JSON or error
-func (c *Client) handleResponse(resp *http.Response, result interface{}) error {
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if result != nil {
-			return json.NewDecoder(resp.Body).Decode(result)
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		apiErr := &APIError{StatusCode: resp.StatusCode}
+		if err := json.Unmarshal(payload, apiErr); err != nil || (apiErr.Code == "" && apiErr.Message == "") {
+			apiErr.Message = string(payload)
 		}
+		return apiErr
+	}
+
+	if out == nil || len(payload) == 0 {
 		return nil
 	}
-
-	var apiErr APIError
-	apiErr.StatusCode = resp.StatusCode
-
-	body, _ := io.ReadAll(resp.Body)
-	if err := json.Unmarshal(body, &apiErr); err == nil {
-		return &apiErr
+	if err := json.Unmarshal(payload, out); err != nil {
+		return &ValidationError{Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
-
-	apiErr.Message = string(body)
-	return &apiErr
+	return nil
 }
 
-// ==================== JUDGMENT API (Core Primitive #1) ====================
-
-type JudgmentRequest struct {
-	Entity       string                 `json:"entity"`
-	Action       string                 `json:"action"`
-	Scope        map[string]interface{} `json:"scope,omitempty"`
-	Immutability map[string]interface{} `json:"immutability,omitempty"`
+func validateVerb(verb Verb) error {
+	switch verb {
+	case VerbJudgment, VerbDelegation, VerbTermination, VerbVerification:
+		return nil
+	default:
+		return &ValidationError{Message: "verb must be J, D, T, or V"}
+	}
 }
-
-type JudgmentResponse struct {
-	ID        string    `json:"id"`       // Starts with 'jep_'
-	Status    string    `json:"status"`
-	Protocol  string    `json:"protocol"` // e.g., 'JEP/1.0'
-	Timestamp time.Time `json:"timestamp"`
-}
-
-func (c *Client) Judgment(req *JudgmentRequest) (*JudgmentResponse, error) {
-	if req.Entity == "" || req.Action == "" {
-		return nil, &ValidationError{Message: "entity and action are required"}
-	}
-
-	resp, err := c.doRequest("POST", "/judgments", req)
-	if err != nil {
-		return nil, err
-	}
-
-	var result JudgmentResponse
-	if err := c.handleResponse(resp, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (c *Client) GetJudgment(id string) (*JudgmentResponse, error) {
-	if id == "" {
-		return nil, &ValidationError{Message: "id is required"}
-	}
-
-	resp, err := c.doRequest("GET", "/judgments/"+id, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var result JudgmentResponse
-	if err := c.handleResponse(resp, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ... (其他 Primitive 方法逻辑保持 1:1，此处仅展示结构更新)
-
-// ==================== VERIFICATION API (Core Primitive #4) ====================
-
-// Verify performs quick verification (auto-detects type from ID)
-func (c *Client) Verify(id string) (*QuickVerifyResponse, error) {
-	if id == "" {
-		return nil, &ValidationError{Message: "id is required"}
-	}
-
-	req := map[string]string{"id": id}
-	resp, err := c.doRequest("POST", "/verify", req)
-	if err != nil {
-		return nil, err
-	}
-
-	var result QuickVerifyResponse
-	if err := c.handleResponse(resp, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ==================== ERROR TYPES ====================
 
 type APIError struct {
-	Error      string `json:"error"`
+	Code       string `json:"error,omitempty"`
 	Message    string `json:"message,omitempty"`
 	StatusCode int    `json:"-"`
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("JEP API error (%d): %s", e.StatusCode, e.Error)
+	msg := e.Message
+	if msg == "" {
+		msg = e.Code
+	}
+	return fmt.Sprintf("JEP API error (%d): %s", e.StatusCode, msg)
 }
 
 type ValidationError struct {

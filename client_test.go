@@ -1,101 +1,168 @@
-package jep // 已同步更名为 jep
+package jep
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
-func TestNewClient(t *testing.T) {
-	client := NewClient("test-key")
-	if client.apiKey != "test-key" {
-		t.Errorf("Expected apiKey 'test-key', got %s", client.apiKey)
+func TestCreateEvent(t *testing.T) {
+	var seenPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPath = r.URL.Path
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+
+		var req CreateEventRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req.Verb != VerbJudgment {
+			t.Fatalf("expected J, got %s", req.Verb)
+		}
+
+		resp := EventResponse{
+			Event: JEPEvent{
+				JEP:   JEPWireVersion,
+				Verb:  req.Verb,
+				Who:   req.Who,
+				What:  req.What,
+				Nonce: "nonce-1",
+				Sig:   "header..sig",
+			},
+			EventHash: "sha256:abc",
+			Validation: ValidationResult{
+				Valid:     true,
+				Level:     1,
+				Mode:      "archival",
+				Profile:   JEPCoreProfile,
+				EventHash: "sha256:abc",
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClientWithURL(server.URL, "test-key")
+	resp, err := client.CreateEvent(&CreateEventRequest{
+		Verb: VerbJudgment,
+		Who:  "did:example:agent",
+		What: map[string]interface{}{"claim": "approve"},
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent error: %v", err)
 	}
-	if client.baseURL != DefaultBaseURL {
-		t.Errorf("Expected baseURL %s, got %s", DefaultBaseURL, client.baseURL)
+	if seenPath != "/events/create" {
+		t.Fatalf("expected /events/create, got %s", seenPath)
+	}
+	if resp.EventHash != "sha256:abc" {
+		t.Fatalf("unexpected event hash: %s", resp.EventHash)
+	}
+	if !resp.Validation.Valid {
+		t.Fatalf("expected valid response")
 	}
 }
 
-func TestJudgmentValidation(t *testing.T) {
-	client := NewClient("test-key")
+func TestVerifyEvent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/events/verify" {
+			t.Fatalf("expected /events/verify, got %s", r.URL.Path)
+		}
+		resp := ValidationResult{
+			Valid:     true,
+			Level:     1,
+			Mode:      "archival",
+			Profile:   JEPCoreProfile,
+			EventHash: "sha256:def",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
 
-	// Test missing entity
-	_, err := client.Judgment(&JudgmentRequest{
-		Action: "jep_compliance_test", // 语义化动作名
+	client := NewClientWithURL(server.URL, "")
+	result, err := client.VerifyEvent(&VerifyEventRequest{
+		Event: JEPEvent{
+			JEP:   JEPWireVersion,
+			Verb:  VerbJudgment,
+			Who:   "did:example:agent",
+			When:  123,
+			What:  "sha256:abc",
+			Nonce: "nonce-1",
+			Sig:   "header..sig",
+		},
+		Mode: "archival",
 	})
-	if err == nil {
-		t.Error("Expected error for missing entity, got nil")
+	if err != nil {
+		t.Fatalf("VerifyEvent error: %v", err)
 	}
-
-	// Test missing action
-	_, err = client.Judgment(&JudgmentRequest{
-		Entity: "tester@jep-protocol.org",
-	})
-	if err == nil {
-		t.Error("Expected error for missing action, got nil")
-	}
-}
-
-func TestDelegationValidation(t *testing.T) {
-	client := NewClient("test-key")
-
-	// Test missing delegator
-	_, err := client.Delegation(&DelegationRequest{
-		Delegatee: "delegatee@example.com",
-	})
-	if err == nil {
-		t.Error("Expected error for missing delegator, got nil")
-	}
-
-	// Test missing delegatee
-	_, err = client.Delegation(&DelegationRequest{
-		Delegator: "delegator@example.com",
-	})
-	if err == nil {
-		t.Error("Expected error for missing delegatee, got nil")
+	if !result.Valid || result.Profile != JEPCoreProfile {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 
-func TestTerminationValidation(t *testing.T) {
-	client := NewClient("test-key")
+func TestValidation(t *testing.T) {
+	client := NewClient("")
 
-	// Test missing terminator
-	_, err := client.Termination(&TerminationRequest{
-		TargetID:   "jep_12345", // 使用 jep_ 前缀示例
-		TargetType: "judgment",
-	})
-	if err == nil {
-		t.Error("Expected error for missing terminator, got nil")
+	if _, err := client.CreateEvent(nil); err == nil {
+		t.Fatal("expected error for nil request")
 	}
-
-	// Test invalid target type
-	_, err = client.Termination(&TerminationRequest{
-		Terminator: "admin@jep-protocol.org",
-		TargetID:   "jep_12345",
-		TargetType: "invalid",
-	})
-	if err == nil {
-		t.Error("Expected error for invalid target type, got nil")
+	if _, err := client.CreateEvent(&CreateEventRequest{Verb: Verb("X"), What: "x"}); err == nil {
+		t.Fatal("expected error for invalid verb")
+	}
+	if _, err := client.CreateEvent(&CreateEventRequest{Verb: VerbJudgment}); err == nil {
+		t.Fatal("expected error for missing what")
+	}
+	if _, err := client.VerifyEvent(nil); err == nil {
+		t.Fatal("expected error for nil verify request")
 	}
 }
 
-func TestVerificationValidation(t *testing.T) {
-	client := NewClient("test-key")
+func TestHealth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("expected /health, got %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(HealthResponse{OK: true, Profile: JEPCoreProfile})
+	}))
+	defer server.Close()
 
-	// Test missing verifier
-	_, err := client.Verification(&VerificationRequest{
-		TargetID:   "jep_12345",
-		TargetType: "judgment",
-	})
-	if err == nil {
-		t.Error("Expected error for missing verifier, got nil")
+	client := NewClientWithURL(server.URL, "")
+	health, err := client.Health()
+	if err != nil {
+		t.Fatalf("Health error: %v", err)
+	}
+	if !health.OK || health.Profile != JEPCoreProfile {
+		t.Fatalf("unexpected health: %+v", health)
 	}
 }
 
-func TestVerifyValidation(t *testing.T) {
-	client := NewClient("test-key")
+func TestConvenienceHelpers(t *testing.T) {
+	var verbs []Verb
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req CreateEventRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		verbs = append(verbs, req.Verb)
+		_ = json.NewEncoder(w).Encode(EventResponse{
+			Event:      JEPEvent{JEP: JEPWireVersion, Verb: req.Verb, Who: req.Who, What: req.What, Nonce: "n", Sig: "h..s"},
+			EventHash:  "sha256:x",
+			Validation: ValidationResult{Valid: true, Profile: JEPCoreProfile},
+		})
+	}))
+	defer server.Close()
 
-	// Test missing id
-	_, err := client.Verify("")
-	if err == nil {
-		t.Error("Expected error for missing id, got nil")
+	client := NewClientWithURL(server.URL, "")
+	ref := "sha256:parent"
+	_, _ = client.Judgment("agent", "judge")
+	_, _ = client.Delegation("agent", "delegate")
+	_, _ = client.Termination("agent", "terminate", &ref)
+	_, _ = client.Verification("agent", "verify", ref)
+
+	expected := []Verb{VerbJudgment, VerbDelegation, VerbTermination, VerbVerification}
+	for i, want := range expected {
+		if verbs[i] != want {
+			t.Fatalf("verb[%d] = %s, want %s", i, verbs[i], want)
+		}
 	}
 }

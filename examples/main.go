@@ -3,66 +3,36 @@ package main
 import (
 	"fmt"
 	"log"
-	"github.com/jep-protocol/sdk-go"
+
+	jep "github.com/hjs-spec/jep-sdk-go"
 )
 
 func main() {
-	// Create client
-	client := jep.NewClient("your-api-key")
+	client := jep.NewClientWithURL("http://127.0.0.1:8000", "")
 
-	// 1. Record a judgment
-	fmt.Println("📝 Recording judgment...")
-	judgment, err := client.Judgment(&jep.JudgmentRequest{
-		Entity: "alice@bank.com",
-		Action: "loan_approved",
-		Scope: map[string]interface{}{
-			"amount":   100000,
-			"currency": "USD",
+	resp, err := client.CreateEvent(&jep.CreateEventRequest{
+		Verb: jep.VerbJudgment,
+		Who:  "did:example:agent-789",
+		What: map[string]interface{}{
+			"claim":   "approve",
+			"subject": "demo",
 		},
+		Aud: "https://api.example.org",
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("✅ Judgment recorded: %s\n", judgment.ID)
 
-	// 2. Create a delegation
-	fmt.Println("\n📝 Creating delegation...")
-	delegation, err := client.Delegation(&jep.DelegationRequest{
-		Delegator: "manager@company.com",
-		Delegatee: "employee@company.com",
-		JudgmentID: judgment.ID,
-		Scope: map[string]interface{}{
-			"permissions": []string{"approve_under_1000", "read"},
-		},
+	fmt.Printf("Event hash: %s\n", resp.EventHash)
+	fmt.Printf("Valid: %v\n", resp.Validation.Valid)
+
+	result, err := client.VerifyEvent(&jep.VerifyEventRequest{
+		Event: resp.Event,
+		Mode:  "archival",
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("✅ Delegation created: %s\n", delegation.ID)
 
-	// 3. Verify the delegation
-	fmt.Println("\n🔍 Verifying delegation...")
-	verification, err := client.Verify(delegation.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("✅ Verification result: %s\n", verification.Status)
-
-	// 4. List judgments
-	fmt.Println("\n📋 Listing judgments...")
-	list, err := client.ListJudgments(&jep.ListJudgmentsParams{
-		Limit: 10,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Found %d judgments\n", list.Total)
-
-	// 5. Check health
-	fmt.Println("\n🏥 Checking health...")
-	health, err := client.Health()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("API health: %s\n", health.Status)
+	fmt.Printf("Verification profile: %s\n", result.Profile)
 }

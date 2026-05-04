@@ -1,0 +1,8 @@
+{
+  "gofmt_returncode": 0,
+  "gofmt_stderr": "",
+  "test_cmd": "go test ./...",
+  "test_returncode": 0,
+  "test_stdout": "?   \tgithub.com/hjs-spec/jep-sdk-go/examples\t[no test files]\nok  \tgithub.com/hjs-spec/jep-sdk-go\t0.086s\n",
+  "test_stderr": ""
+}

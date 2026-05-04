@@ -1,2 +1,3 @@
-module github.com/jep-protocol/sdk-go
+module github.com/hjs-spec/jep-sdk-go
+
 go 1.21
