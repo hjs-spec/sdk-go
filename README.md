@@ -1,6 +1,6 @@
 # JEP Go SDK v0.6
 
-Go SDK for the JEP v0.6 API seed.
+Go client for the JEP-Core-0.6 API (wire version `"1"`). SDK release versions are separate from the protocol version.
 
 This SDK targets the current JEP API shape:
 
@@ -30,6 +30,8 @@ go get github.com/hjs-spec/sdk-go
 ```
 
 ## Quick Start
+
+Start the [local API](https://github.com/hjs-spec/jep-api#run-locally) before running this example. Verification uses that API's configured trusted keys.
 
 ```go
 package main
@@ -71,21 +73,7 @@ func main() {
 
 ## Core Types
 
-```go
-type JEPEvent struct {
-    JEP     string                 `json:"jep"`
-    Verb    Verb                   `json:"verb"`
-    Who     string                 `json:"who"`
-    When    int64                  `json:"when"`
-    What    interface{}            `json:"what,omitempty"`
-    Nonce   string                 `json:"nonce"`
-    Aud     string                 `json:"aud,omitempty"`
-    Ref     *string                `json:"ref,omitempty"`
-    Ext     map[string]interface{} `json:"ext,omitempty"`
-    ExtCrit []string               `json:"ext_crit,omitempty"`
-    Sig     string                 `json:"sig,omitempty"`
-}
-```
+See [client.go](client.go) for the current event, request, and result types, including preservation of signed JSON members.
 
 Supported verbs:
 
@@ -96,41 +84,21 @@ jep.VerbTermination
 jep.VerbVerification
 ```
 
-## API
+## API and helpers
 
-### Create event
+The quickstart above demonstrates event creation and archival verification. The client also exposes helpers for the four verbs; see [client methods and types](client.go) for signatures and options.
 
-```go
-resp, err := client.CreateEvent(&jep.CreateEventRequest{
-    Verb: jep.VerbJudgment,
-    Who:  "did:example:agent",
-    What: "sha256:...",
-})
-```
-
-### Verify event
-
-```go
-result, err := client.VerifyEvent(&jep.VerifyEventRequest{
-    Event: resp.Event,
-    Mode: "archival",
-})
-```
-
-### Convenience helpers
-
-```go
-client.Judgment("did:example:agent", what)
-client.Delegation("did:example:agent", what)
-client.Termination("did:example:agent", what, &ref)
-client.Verification("did:example:agent", what, ref)
-```
+For object-form `what`, `D` requires a claim, delegatee, and scope; `T` requires a claim, target, and termination scope; `V` requires a verification scope and non-null reference. Digest-form claims are also supported. Use the actual returned event hash for an event reference. See the [event schema](https://github.com/hjs-spec/jep-v06/blob/main/schemas/jep-event.schema.json) for the full requirements.
 
 ### Health
 
 ```go
 health, err := client.Health()
 ```
+
+## Validation results
+
+Validation results preserve the API's `conformance_class` and diagnostic fields (`code`, `message`, `level`, `recoverable`). Older servers may omit the class; the SDK does not infer conformance.
 
 ## Testing
 
@@ -156,5 +124,3 @@ Tests use `httptest` and do not require a live API server.
 ## License
 
 MIT
-
-Validation results expose `conformance_class` from the API. This field may be absent (empty in Python/Go) with older servers; it is never inferred as proof of conformance. Diagnostic maps preserve `code`, `message`, `level`, and `recoverable`.
