@@ -166,3 +166,31 @@ func TestConvenienceHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestValidationResultConformanceAndLegacyResponse(t *testing.T) {
+	for _, payload := range []string{
+		`{"valid":true,"level":1,"mode":"archival","profile":"jep-core-0.6","conformance_class":"JEP-Baseline-Ed25519-JWS-JCS-0.6","warnings":[{"code":"ACCEPTANCE_NOT_CHECKED","message":"archival","level":1,"recoverable":false}]}`,
+		`{"valid":true,"level":1,"mode":"archival","profile":"jep-core-0.6"}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(payload))
+		}))
+		client := NewClientWithURL(server.URL, "")
+		result, err := client.VerifyEvent(&VerifyEventRequest{Event: JEPEvent{JEP: "1", Verb: VerbJudgment}})
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw map[string]interface{}
+		if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+			t.Fatal(err)
+		}
+		expected, _ := raw["conformance_class"].(string)
+		if !result.Valid || result.ConformanceClass != expected {
+			t.Fatalf("lost result metadata: %+v", result)
+		}
+		if expected != "" && (len(result.Warnings) != 1 || result.Warnings[0]["recoverable"] != false) {
+			t.Fatalf("lost diagnostics: %+v", result)
+		}
+	}
+}

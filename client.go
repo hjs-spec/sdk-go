@@ -189,14 +189,15 @@ type VerifyEventRequest struct {
 }
 
 type ValidationResult struct {
-	Valid     bool                     `json:"valid"`
-	Level     int                      `json:"level"`
-	Mode      string                   `json:"mode"`
-	Profile   string                   `json:"profile"`
-	Scopes    []string                 `json:"scopes,omitempty"`
-	EventHash string                   `json:"event_hash,omitempty"`
-	Warnings  []map[string]interface{} `json:"warnings,omitempty"`
-	Errors    []map[string]interface{} `json:"errors,omitempty"`
+	ConformanceClass string                   `json:"conformance_class,omitempty"`
+	Valid            bool                     `json:"valid"`
+	Level            int                      `json:"level"`
+	Mode             string                   `json:"mode"`
+	Profile          string                   `json:"profile"`
+	Scopes           []string                 `json:"scopes,omitempty"`
+	EventHash        string                   `json:"event_hash,omitempty"`
+	Warnings         []map[string]interface{} `json:"warnings,omitempty"`
+	Errors           []map[string]interface{} `json:"errors,omitempty"`
 }
 
 type HealthResponse struct {
