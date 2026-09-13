@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	jep "github.com/hjs-spec/jep-sdk-go"
+	jep "github.com/hjs-spec/sdk-go"
 )
 
 func main() {
