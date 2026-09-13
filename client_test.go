@@ -111,7 +111,7 @@ func TestValidation(t *testing.T) {
 	if _, err := client.CreateEvent(&CreateEventRequest{Verb: Verb("X"), What: "x"}); err == nil {
 		t.Fatal("expected error for invalid verb")
 	}
-	if _, err := client.CreateEvent(&CreateEventRequest{Verb: VerbJudgment}); err == nil {
+	if _, err := client.CreateEvent(&CreateEventRequest{Verb: VerbDelegation}); err == nil {
 		t.Fatal("expected error for missing what")
 	}
 	if _, err := client.VerifyEvent(nil); err == nil {

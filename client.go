@@ -68,17 +68,99 @@ func (c *Client) SetHTTPClient(client *http.Client) {
 }
 
 type JEPEvent struct {
-	JEP     string                 `json:"jep"`
-	Verb    Verb                   `json:"verb"`
-	Who     string                 `json:"who"`
-	When    int64                  `json:"when"`
-	What    interface{}            `json:"what,omitempty"`
-	Nonce   string                 `json:"nonce"`
-	Aud     string                 `json:"aud,omitempty"`
-	Ref     *string                `json:"ref,omitempty"`
-	Ext     map[string]interface{} `json:"ext,omitempty"`
-	ExtCrit []string               `json:"ext_crit,omitempty"`
-	Sig     string                 `json:"sig,omitempty"`
+	// Reference supports structured v0.6 references while Ref retains the
+	// existing string-pointer API. Ref takes precedence when set.
+	Reference       json.RawMessage `json:"-"`
+	SignatureObject json.RawMessage `json:"-"`
+	wire            map[string]json.RawMessage
+	baseline        map[string]json.RawMessage
+	JEP             string                 `json:"jep"`
+	Verb            Verb                   `json:"verb"`
+	Who             string                 `json:"who"`
+	When            int64                  `json:"when"`
+	What            interface{}            `json:"what,omitempty"`
+	Nonce           string                 `json:"nonce"`
+	Aud             string                 `json:"aud,omitempty"`
+	Ref             *string                `json:"ref,omitempty"`
+	Ext             map[string]interface{} `json:"ext,omitempty"`
+	ExtCrit         []string               `json:"ext_crit,omitempty"`
+	Sig             string                 `json:"sig,omitempty"`
+}
+
+// encodedFields avoids calling MarshalJSON recursively.
+func (e JEPEvent) encodedFields() (map[string]json.RawMessage, error) {
+	type plain JEPEvent
+	raw, err := json.Marshal(plain(e))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	if e.Ref == nil && e.Reference != nil {
+		fields["ref"] = e.Reference
+	}
+	if e.Sig == "" && e.SignatureObject != nil {
+		fields["sig"] = e.SignatureObject
+	}
+	return fields, nil
+}
+
+func (e *JEPEvent) UnmarshalJSON(raw []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return fmt.Errorf("event must be a JSON object")
+	}
+	typed := make(map[string]json.RawMessage, len(fields))
+	for k, v := range fields {
+		typed[k] = v
+	}
+	type plain JEPEvent
+	var decoded plain
+	if v := bytes.TrimSpace(fields["ref"]); len(v) > 0 && v[0] == '{' {
+		decoded.Reference = append(json.RawMessage(nil), v...)
+		delete(typed, "ref")
+	}
+	if v := bytes.TrimSpace(fields["sig"]); len(v) > 0 && v[0] == '{' {
+		decoded.SignatureObject = append(json.RawMessage(nil), v...)
+		delete(typed, "sig")
+	}
+	normalized, err := json.Marshal(typed)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(normalized))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	event := JEPEvent(decoded)
+	event.wire = fields
+	event.baseline, err = event.encodedFields()
+	if err != nil {
+		return err
+	}
+	*e = event
+	return nil
+}
+
+func (e JEPEvent) MarshalJSON() ([]byte, error) {
+	fields, err := e.encodedFields()
+	if err != nil {
+		return nil, err
+	}
+	// Preserve unchanged wire values, including explicit nulls, empty members,
+	// unknown fields and exact number literals. Edits are still serialized.
+	for k, original := range e.wire {
+		if bytes.Equal(fields[k], e.baseline[k]) {
+			fields[k] = original
+		}
+	}
+	return json.Marshal(fields)
 }
 
 type CreateEventRequest struct {
@@ -100,9 +182,10 @@ type EventResponse struct {
 }
 
 type VerifyEventRequest struct {
-	Event        JEPEvent `json:"event"`
-	Mode         string   `json:"mode,omitempty"`
-	ConsumeNonce bool     `json:"consume_nonce,omitempty"`
+	Event            JEPEvent `json:"event"`
+	Mode             string   `json:"mode,omitempty"`
+	ConsumeNonce     bool     `json:"consume_nonce,omitempty"`
+	ExpectedAudience string   `json:"expected_audience,omitempty"`
 }
 
 type ValidationResult struct {
@@ -128,7 +211,7 @@ func (c *Client) CreateEvent(req *CreateEventRequest) (*EventResponse, error) {
 	if err := validateVerb(req.Verb); err != nil {
 		return nil, err
 	}
-	if req.What == nil {
+	if req.What == nil && req.Verb != VerbJudgment {
 		return nil, &ValidationError{Message: "what is required"}
 	}
 
