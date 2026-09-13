@@ -26,7 +26,7 @@ This SDK does not define new JEP-Core semantics and does not determine legal lia
 ## Installation
 
 ```bash
-go get github.com/hjs-spec/jep-sdk-go
+go get github.com/hjs-spec/sdk-go
 ```
 
 ## Quick Start
@@ -38,7 +38,7 @@ import (
     "fmt"
     "log"
 
-    jep "github.com/hjs-spec/jep-sdk-go"
+    jep "github.com/hjs-spec/sdk-go"
 )
 
 func main() {
