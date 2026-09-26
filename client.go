@@ -1,8 +1,9 @@
 // Package jep provides a Go SDK for the JEP Core 0.7 reference API.
 //
 // Default endpoints:
-//   POST /v0.7/events/create
-//   POST /v0.7/events/verify
+//
+//	POST /v0.7/events/create
+//	POST /v0.7/events/verify
 //
 // Historical pre-0.7 compatibility is explicit and never selected by fallback.
 package jep
@@ -50,7 +51,9 @@ func NewClientWithURL(baseURL, apiKey string) *Client {
 
 func (c *Client) SetTimeout(timeout time.Duration) { c.httpClient.Timeout = timeout }
 func (c *Client) SetHTTPClient(client *http.Client) {
-	if client != nil { c.httpClient = client }
+	if client != nil {
+		c.httpClient = client
+	}
 }
 
 type JEPEvent struct {
@@ -65,6 +68,63 @@ type JEPEvent struct {
 	Ext     map[string]interface{} `json:"ext,omitempty"`
 	ExtCrit []string               `json:"ext_crit,omitempty"`
 	Sig     interface{}            `json:"sig,omitempty"`
+	wire    map[string]json.RawMessage
+}
+
+// UnmarshalJSON preserves number tokens and member presence in imported artifacts.
+// Verification is delegated to the API; unknown members must reach it unchanged
+// so an invalid event cannot become valid through client-side field removal.
+func (e *JEPEvent) UnmarshalJSON(data []byte) error {
+	type eventFields JEPEvent
+	var decoded eventFields
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	*e = JEPEvent(decoded)
+	e.wire = wire
+	return nil
+}
+
+// MarshalJSON retains explicitly present optional fields, while reflecting
+// edits to exported fields. It does not canonicalize or verify signatures.
+func (e JEPEvent) MarshalJSON() ([]byte, error) {
+	type eventFields JEPEvent
+	raw, err := json.Marshal(eventFields(e))
+	if err != nil {
+		return nil, err
+	}
+	if e.wire == nil {
+		return raw, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	optional := map[string]interface{}{
+		"aud": e.Aud, "ref": e.Ref, "ext": e.Ext,
+		"ext_crit": e.ExtCrit, "sig": e.Sig,
+	}
+	for name, original := range e.wire {
+		if _, present := fields[name]; present {
+			continue
+		}
+		if value, known := optional[name]; known {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return nil, err
+			}
+			fields[name] = encoded
+		} else {
+			fields[name] = original
+		}
+	}
+	return json.Marshal(fields)
 }
 
 type CreateEventRequest struct {
@@ -114,32 +174,52 @@ type HealthResponse struct {
 }
 
 func (c *Client) CreateEvent(req *CreateEventRequest) (*EventResponse, error) {
-	if req == nil { return nil, &ValidationError{Message: "request is required"} }
-	if err := validateVerb(req.Verb); err != nil { return nil, err }
-	if req.What == nil { return nil, &ValidationError{Message: "what is required"} }
-	if err := validateVerbShape(req); err != nil { return nil, err }
+	if req == nil {
+		return nil, &ValidationError{Message: "request is required"}
+	}
+	if err := validateVerb(req.Verb); err != nil {
+		return nil, err
+	}
+	if req.What == nil {
+		return nil, &ValidationError{Message: "what is required"}
+	}
+	if err := validateVerbShape(req); err != nil {
+		return nil, err
+	}
 	var result EventResponse
-	if err := c.doJSON(http.MethodPost, "/v0.7/events/create", req, &result); err != nil { return nil, err }
+	if err := c.doJSON(http.MethodPost, "/v0.7/events/create", req, &result); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
 func (c *Client) VerifyEvent(req *VerifyEventRequest) (*ValidationResult, error) {
-	if req == nil { return nil, &ValidationError{Message: "request is required"} }
-	if req.Event.JEP == "" { return nil, &ValidationError{Message: "event is required"} }
+	if req == nil {
+		return nil, &ValidationError{Message: "request is required"}
+	}
+	if req.Event.JEP == "" {
+		return nil, &ValidationError{Message: "event is required"}
+	}
 	var result ValidationResult
-	if err := c.doJSON(http.MethodPost, "/v0.7/events/verify", req, &result); err != nil { return nil, err }
+	if err := c.doJSON(http.MethodPost, "/v0.7/events/verify", req, &result); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
 func (c *Client) VerifyEventLegacy(payload interface{}) (map[string]interface{}, error) {
 	var result map[string]interface{}
-	if err := c.doJSON(http.MethodPost, "/events/verify-legacy", payload, &result); err != nil { return nil, err }
+	if err := c.doJSON(http.MethodPost, "/events/verify-legacy", payload, &result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
 func (c *Client) Health() (*HealthResponse, error) {
 	var result HealthResponse
-	if err := c.doJSON(http.MethodGet, "/health", nil, &result); err != nil { return nil, err }
+	if err := c.doJSON(http.MethodGet, "/health", nil, &result); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
@@ -164,22 +244,30 @@ func (c *Client) doJSON(method, path string, body interface{}, out interface{}) 
 	var reqBody io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
-		if err != nil { return &ValidationError{Message: fmt.Sprintf("failed to marshal request: %v", err)} }
+		if err != nil {
+			return &ValidationError{Message: fmt.Sprintf("failed to marshal request: %v", err)}
+		}
 		reqBody = bytes.NewReader(data)
 	}
 	req, err := http.NewRequest(method, url, reqBody)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "JEP-Go-SDK/0.7.0")
+	req.Header.Set("User-Agent", "JEP-Go-SDK/0.7.1")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	payload, err := io.ReadAll(resp.Body)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		apiErr := &APIError{StatusCode: resp.StatusCode}
 		if err := json.Unmarshal(payload, apiErr); err != nil || (apiErr.Code == "" && apiErr.Message == "") {
@@ -187,7 +275,9 @@ func (c *Client) doJSON(method, path string, body interface{}, out interface{}) 
 		}
 		return apiErr
 	}
-	if out == nil || len(payload) == 0 { return nil }
+	if out == nil || len(payload) == 0 {
+		return nil
+	}
 	if err := json.Unmarshal(payload, out); err != nil {
 		return &ValidationError{Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
@@ -207,17 +297,23 @@ func validateVerbShape(req *CreateEventRequest) error {
 	obj, _ := req.What.(map[string]interface{})
 	switch req.Verb {
 	case VerbDelegation:
-		if obj == nil || obj["delegatee"] == nil || obj["scope"] == nil {
+		_, hasScope := obj["scope"]
+		if obj == nil || obj["delegatee"] == nil || !hasScope {
 			return &ValidationError{Message: "D requires what.delegatee and what.scope"}
 		}
 	case VerbTermination:
-		if req.Ref == nil { return &ValidationError{Message: "T requires ref"} }
+		if req.Ref == nil {
+			return &ValidationError{Message: "T requires ref"}
+		}
 		if obj == nil || obj["termination_scope"] == nil {
 			return &ValidationError{Message: "T requires what.termination_scope"}
 		}
 	case VerbVerification:
-		if req.Ref == nil { return &ValidationError{Message: "V requires ref"} }
-		if obj == nil || obj["verification_scope"] == nil || obj["result"] == nil {
+		if req.Ref == nil {
+			return &ValidationError{Message: "V requires ref"}
+		}
+		_, hasResult := obj["result"]
+		if obj == nil || obj["verification_scope"] == nil || !hasResult {
 			return &ValidationError{Message: "V requires what.verification_scope and what.result"}
 		}
 	}
@@ -232,9 +328,12 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	msg := e.Message
-	if msg == "" { msg = e.Code }
+	if msg == "" {
+		msg = e.Code
+	}
 	return fmt.Sprintf("JEP API error (%d): %s", e.StatusCode, msg)
 }
 
 type ValidationError struct{ Message string }
+
 func (e *ValidationError) Error() string { return fmt.Sprintf("JEP validation error: %s", e.Message) }

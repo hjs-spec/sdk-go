@@ -83,3 +83,7 @@ go test ./...
 ## License
 
 MIT
+
+## Signed-event transport
+
+Imported events retain explicitly present empty extension objects/arrays and unknown members. Unknown members must reach the verifier so they cannot be silently removed from an invalid event. Nested numeric values decode as `json.Number` to preserve the received numeric token; callers can explicitly convert after validation. Editing exported fields changes the transmitted event and requires a new signature. The SDK delegates cryptographic and profile checks to the API.

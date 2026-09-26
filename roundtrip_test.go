@@ -1,8 +1,8 @@
 package jep
 
 import (
+	"bytes"
 	"encoding/json"
-	"reflect"
 	"testing"
 )
 
@@ -37,8 +37,18 @@ func TestV07EventRoundTrip(t *testing.T) {
 		if err := json.Unmarshal(raw, &decoded); err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(event, decoded) {
-			t.Fatalf("roundtrip changed event: %#v != %#v", event, decoded)
+		roundtrip, err := json.Marshal(decoded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var originalValue, returnedValue interface{}
+		// Compare transported JSON, not the model's private presence bookkeeping.
+		_ = json.Unmarshal(raw, &originalValue)
+		_ = json.Unmarshal(roundtrip, &returnedValue)
+		left, _ := json.Marshal(originalValue)
+		right, _ := json.Marshal(returnedValue)
+		if !bytes.Equal(left, right) {
+			t.Fatalf("roundtrip changed event: %s != %s", left, right)
 		}
 	}
 }
