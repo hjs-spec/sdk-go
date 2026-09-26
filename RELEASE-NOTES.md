@@ -1,10 +1,8 @@
-# JEP Core 0.7 migration
+# Release 0.7.1
 
-- Default API path is now `/v0.7/events/*`.
-- Events use stable `id` and no longer require Core `nonce`.
-- Validation results use `status`, independent `checks`, `event_identity`, and optional `acceptance`.
-- D/T/V Core minimum shapes are validated before requests are sent.
-- Historical pre-0.7 verification remains explicit; there is no automatic fallback.
+- Preserve signed imported events through JSON decode/encode, including empty `ext`, empty `ext_crit`, unknown members and nested number tokens.
+- Decode nested event numbers as `json.Number`; callers can convert explicitly after validation instead of accepting an implicit float64 conversion.
+- Keep edits to exported event fields visible to the verifier.
+- Distinguish required D `scope` and V `result` member presence from profile-defined values, including explicit null.
 
-
-The earlier 0.6 release added `conformance_class` passthrough. Current releases retain it while using the Core 0.7 profile; the wire major remains `jep: "1"`.
+Core remains 0.7. The client transports events; it does not independently verify signatures or TSTO policy.
