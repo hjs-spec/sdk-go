@@ -1,20 +1,21 @@
-# JEP Go SDK v0.6
+# JEP Go SDK — JEP Core 0.7
 
-Go client for the [JEP-Core-0.6](https://github.com/hjs-spec/jep-v06) API (wire version `"1"`). SDK release versions are separate from the protocol version. See the protocol repository for core semantics, profiles, and public drafts.
+Go client for the current [JEP Core 0.7](https://github.com/hjs-spec/jep-core) reference API.
 
-This SDK targets the current JEP API shape:
+Default endpoints:
 
 ```text
-POST /events/create
-POST /events/verify
+POST /v0.7/events/create
+POST /v0.7/events/verify
 GET  /health
 ```
 
+Historical pre-0.7 verification is explicit through `VerifyEventLegacy`; no failed 0.7 event is automatically reinterpreted as 0.6.
+
 ## Status
 
-Experimental implementation seed.
-
-This SDK does not define new JEP-Core semantics and does not determine legal liability, factual truth, regulatory compliance, or complete-log availability.
+Experimental reference SDK. It does not define new Core semantics or determine
+truth, legal effect, authorization validity, causality, or policy outcome.
 
 ## Installation
 
@@ -22,67 +23,49 @@ This SDK does not define new JEP-Core semantics and does not determine legal lia
 go get github.com/hjs-spec/sdk-go
 ```
 
-## Quick Start
+## JEP Core 0.7 model
 
-Start the [local API](https://github.com/hjs-spec/jep-api#run-locally) before running this example. Verification uses that API's configured trusted keys.
+- Event Identity is `(who,id)`; `id` is required.
+- Core does not require a top-level nonce.
+- Event Hash identifies an exact signed artifact, not the logical event identity.
+- Validation returns `status` and independent `checks`, not a Validation Level.
+- Acceptance may return `accepted` or `already_accepted`.
+- D requires `delegatee + scope`.
+- T requires `ref + termination_scope`.
+- V requires `ref + verification_scope + result`.
+
+## Quick start
 
 ```go
-package main
+client := jep.NewClientWithURL("http://127.0.0.1:8000", "")
 
-import (
-    "fmt"
-    "log"
-
-    jep "github.com/hjs-spec/sdk-go"
-)
-
-func main() {
-    client := jep.NewClientWithURL("http://127.0.0.1:8000", "")
-
-    resp, err := client.CreateEvent(&jep.CreateEventRequest{
-        Verb: jep.VerbJudgment,
-        Who:  "did:example:agent-789",
-        What: map[string]interface{}{
-            "claim": "approve",
-        },
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(resp.EventHash)
-
-    result, err := client.VerifyEvent(&jep.VerifyEventRequest{
-        Event: resp.Event,
-        Mode: "archival",
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(result.Valid)
+resp, err := client.CreateEvent(&jep.CreateEventRequest{
+    Verb: jep.VerbJudgment,
+    Who:  "did:example:agent-789",
+    What: map[string]interface{}{"claim": "approve"},
+})
+if err != nil {
+    log.Fatal(err)
 }
+
+result, err := client.VerifyEvent(&jep.VerifyEventRequest{
+    Event: resp.Event,
+    Mode:  "archival",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.Event.ID)
+fmt.Println(resp.EventHash)
+fmt.Println(result.Status, result.Checks)
 ```
 
-## Core Types
+The normative event schema is maintained in [jep-core](https://github.com/hjs-spec/jep-core/blob/main/schemas/jep-event.schema.json).
 
-See [client.go](client.go) for the current event, request, and result types, including preservation of signed JSON members.
+## Legacy 0.6
 
-## API and helpers
-
-The quickstart above demonstrates event creation and archival verification. The client also exposes helpers for the four verbs; see [client methods and types](client.go) for signatures and options.
-
-Claim fields and reference requirements are defined in the [Core-0.6 event schema](https://github.com/hjs-spec/jep-v06/blob/main/schemas/jep-event.schema.json). For an event reference, use the actual returned event hash.
-
-### Health
-
-```go
-health, err := client.Health()
-```
-
-## Validation results
-
-Validation results preserve the API's `conformance_class` and diagnostic fields (`code`, `message`, `level`, `recoverable`). Older servers may omit the class; the SDK does not infer conformance.
+Use `VerifyEventLegacy` only when the caller already knows the artifact is historical pre-0.7. Decoder selection must be explicit.
 
 ## Testing
 
@@ -90,14 +73,12 @@ Validation results preserve the API's `conformance_class` and diagnostic fields 
 go test ./...
 ```
 
-Tests use `httptest` and do not require a live API server.
+## Related repositories
 
-## Related Repositories
-
-- JEP v0.6: https://github.com/hjs-spec/jep-v06
-- JEP API v0.6: https://github.com/hjs-spec/jep-api
-- HJS v0.5: https://github.com/hjs-spec/hjs-05
-- JAC v0.5: https://github.com/hjs-spec/jac-agent-02
+- JEP Core 0.7: https://github.com/hjs-spec/jep-core
+- JEP API: https://github.com/hjs-spec/jep-api
+- Python SDK: https://github.com/hjs-spec/sdk-py
+- JavaScript SDK: https://github.com/hjs-spec/sdk-js
 
 ## License
 
