@@ -1,9 +1,9 @@
-// Package jep provides a Go SDK for the JEP v0.6 API seed.
+// Package jep provides a Go SDK for the JEP Core 0.7 reference API.
 //
-// It is aligned with the JEP v0.6 event API shape:
+// Default endpoints:
 //
-//	POST /events/create
-//	POST /events/verify
+//	POST /v0.7/events/create
+//	POST /v0.7/events/verify
 //
 // This SDK is an implementation seed. It does not define new JEP-Core
 // semantics and does not perform legal, factual, or compliance validation.
@@ -23,7 +23,8 @@ const (
 	DefaultBaseURL = "http://127.0.0.1:8000"
 	DefaultTimeout = 30 * time.Second
 	JEPWireVersion = "1"
-	JEPCoreProfile = "jep-core-0.6"
+	JEPCoreProfile = "jep-core-0.7"
+	LegacyJEPCoreProfile = "jep-core-0.6"
 )
 
 type Verb string
@@ -79,7 +80,7 @@ type JEPEvent struct {
 	Who             string                 `json:"who"`
 	When            int64                  `json:"when"`
 	What            interface{}            `json:"what,omitempty"`
-	Nonce           string                 `json:"nonce"`
+	ID              string                 `json:"id"`
 	Aud             string                 `json:"aud,omitempty"`
 	Ref             *string                `json:"ref,omitempty"`
 	Ext             map[string]interface{} `json:"ext,omitempty"`
@@ -164,6 +165,7 @@ func (e JEPEvent) MarshalJSON() ([]byte, error) {
 }
 
 type CreateEventRequest struct {
+	ID            string                 `json:"id,omitempty"`
 	Verb          Verb                   `json:"verb"`
 	Who           string                 `json:"who,omitempty"`
 	What          interface{}            `json:"what"`
@@ -184,21 +186,24 @@ type EventResponse struct {
 type VerifyEventRequest struct {
 	Event            JEPEvent `json:"event"`
 	Mode             string   `json:"mode,omitempty"`
-	ConsumeNonce     bool     `json:"consume_nonce,omitempty"`
 	ExpectedAudience string   `json:"expected_audience,omitempty"`
+	MaxAgeSeconds    *int     `json:"max_age_seconds,omitempty"`
 }
 
 type ValidationResult struct {
 	ConformanceClass string                   `json:"conformance_class,omitempty"`
-	Valid            bool                     `json:"valid"`
-	Level            int                      `json:"level"`
+	Status           string                   `json:"status"`
 	Mode             string                   `json:"mode"`
 	Profile          string                   `json:"profile"`
-	Scopes           []string                 `json:"scopes,omitempty"`
+	EventIdentity    map[string]string        `json:"event_identity,omitempty"`
+	Checks           map[string]string        `json:"checks,omitempty"`
+	Acceptance       map[string]interface{}   `json:"acceptance,omitempty"`
 	EventHash        string                   `json:"event_hash,omitempty"`
 	Warnings         []map[string]interface{} `json:"warnings,omitempty"`
 	Errors           []map[string]interface{} `json:"errors,omitempty"`
 }
+
+func (v ValidationResult) Valid() bool { return v.Status == "valid" }
 
 type HealthResponse struct {
 	OK      bool   `json:"ok"`
@@ -212,12 +217,15 @@ func (c *Client) CreateEvent(req *CreateEventRequest) (*EventResponse, error) {
 	if err := validateVerb(req.Verb); err != nil {
 		return nil, err
 	}
-	if req.What == nil && req.Verb != VerbJudgment {
+	if req.What == nil {
 		return nil, &ValidationError{Message: "what is required"}
+	}
+	if err := validateVerbShape(req); err != nil {
+		return nil, err
 	}
 
 	var result EventResponse
-	if err := c.doJSON(http.MethodPost, "/events/create", req, &result); err != nil {
+	if err := c.doJSON(http.MethodPost, "/v0.7/events/create", req, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -231,7 +239,7 @@ func (c *Client) VerifyEvent(req *VerifyEventRequest) (*ValidationResult, error)
 		return nil, &ValidationError{Message: "event is required"}
 	}
 	var result ValidationResult
-	if err := c.doJSON(http.MethodPost, "/events/verify", req, &result); err != nil {
+	if err := c.doJSON(http.MethodPost, "/v0.7/events/verify", req, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -299,7 +307,7 @@ func (c *Client) doJSON(method, path string, body interface{}, out interface{}) 
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "JEP-Go-SDK/0.6.0")
+	req.Header.Set("User-Agent", "JEP-Go-SDK/0.7.0")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("X-API-Key", c.apiKey)
@@ -340,6 +348,31 @@ func validateVerb(verb Verb) error {
 	default:
 		return &ValidationError{Message: "verb must be J, D, T, or V"}
 	}
+}
+
+func validateVerbShape(req *CreateEventRequest) error {
+	obj, _ := req.What.(map[string]interface{})
+	switch req.Verb {
+	case VerbDelegation:
+		if obj == nil || obj["delegatee"] == nil || obj["scope"] == nil {
+			return &ValidationError{Message: "D requires what.delegatee and what.scope"}
+		}
+	case VerbTermination:
+		if req.Ref == nil && req.Reference == nil {
+			return &ValidationError{Message: "T requires ref"}
+		}
+		if obj == nil || obj["termination_scope"] == nil {
+			return &ValidationError{Message: "T requires what.termination_scope"}
+		}
+	case VerbVerification:
+		if req.Ref == nil && req.Reference == nil {
+			return &ValidationError{Message: "V requires ref"}
+		}
+		if obj == nil || obj["verification_scope"] == nil || obj["result"] == nil {
+			return &ValidationError{Message: "V requires what.verification_scope and what.result"}
+		}
+	}
+	return nil
 }
 
 type APIError struct {
