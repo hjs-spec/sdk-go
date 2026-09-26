@@ -61,7 +61,7 @@ fmt.Println(resp.EventHash)
 fmt.Println(result.Status, result.Checks)
 ```
 
-The normative event schema is maintained in [jep-core](https://github.com/hjs-spec/jep-core/blob/main/schemas/jep-event.schema.json).
+The reference event schema is maintained in [jep-core](https://github.com/hjs-spec/jep-core/blob/main/schemas/jep-event.schema.json).
 
 ## Legacy 0.6
 

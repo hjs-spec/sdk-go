@@ -7,4 +7,4 @@
 - Historical pre-0.7 verification remains explicit; there is no automatic fallback.
 
 
-Preserve the API conformance_class field in validation results. Older API responses remain supported. Protocol remains JEP-Core-0.6 / wire version "1".
+The earlier 0.6 release added `conformance_class` passthrough. Current releases retain it while using the Core 0.7 profile; the wire major remains `jep: "1"`.
