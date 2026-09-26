@@ -24,7 +24,7 @@ func main() {
 	}
 
 	fmt.Printf("Event hash: %s\n", resp.EventHash)
-	fmt.Printf("Valid: %v\n", resp.Validation.Valid)
+	fmt.Printf("Valid: %v\n", resp.Validation.Valid())
 
 	result, err := client.VerifyEvent(&jep.VerifyEventRequest{
 		Event: resp.Event,
