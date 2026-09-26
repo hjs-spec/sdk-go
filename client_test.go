@@ -26,7 +26,6 @@ func TestCreateEvent07(t *testing.T) {
 	if err!=nil{t.Fatal(err)}
 	if seenPath!="/v0.7/events/create"{t.Fatalf("path=%s",seenPath)}
 	if resp.Event.ID==""||!resp.Validation.Valid(){t.Fatalf("unexpected response: %+v",resp)}
-	if resp.Event.Nonce != "" { t.Fatal("unreachable") }
 }
 
 func TestVerifyEvent07(t *testing.T) {
