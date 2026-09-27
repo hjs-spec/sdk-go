@@ -75,6 +75,9 @@ type JEPEvent struct {
 // Verification is delegated to the API; unknown members must reach it unchanged
 // so an invalid event cannot become valid through client-side field removal.
 func (e *JEPEvent) UnmarshalJSON(data []byte) error {
+	if err := validateEventJSON(data); err != nil {
+		return err
+	}
 	type eventFields JEPEvent
 	var decoded eventFields
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -254,7 +257,7 @@ func (c *Client) doJSON(method, path string, body interface{}, out interface{}) 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "JEP-Go-SDK/0.7.1")
+	req.Header.Set("User-Agent", "JEP-Go-SDK/0.7.2")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("X-API-Key", c.apiKey)
