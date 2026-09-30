@@ -2,16 +2,6 @@
 
 Go client for the current [JEP Core 0.7](https://github.com/hjs-spec/jep-core) reference API.
 
-Default endpoints:
-
-```text
-POST /v0.7/events/create
-POST /v0.7/events/verify
-GET  /health
-```
-
-Historical pre-0.7 verification is explicit through `VerifyEventLegacy`; no failed 0.7 event is automatically reinterpreted as 0.6.
-
 ## Status
 
 Experimental HTTP client. Event creation and verification run on the configured
