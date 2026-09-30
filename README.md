@@ -14,25 +14,15 @@ Historical pre-0.7 verification is explicit through `VerifyEventLegacy`; no fail
 
 ## Status
 
-Experimental reference SDK. It does not define new Core semantics or determine
-truth, legal effect, authorization validity, causality, or policy outcome.
+Experimental HTTP client. Event creation and verification run on the configured
+API. Start the [local reference API](https://github.com/hjs-spec/jep-quickstart#start-a-local-api)
+before running the examples below.
 
 ## Installation
 
 ```bash
-go get github.com/hjs-spec/sdk-go
+go get github.com/hjs-spec/sdk-go@v0.7.2
 ```
-
-## JEP Core 0.7 model
-
-- Event Identity is `(who,id)`; `id` is required.
-- Core does not require a top-level nonce.
-- Event Hash identifies an exact signed artifact, not the logical event identity.
-- Validation returns `status` and independent `checks`, not a Validation Level.
-- Acceptance may return `accepted` or `already_accepted`.
-- D requires `delegatee + scope`.
-- T requires `ref + termination_scope`.
-- V requires `ref + verification_scope + result`.
 
 ## Quick start
 
@@ -75,7 +65,7 @@ go test ./...
 
 ## Related repositories
 
-- JEP Core 0.7: https://github.com/hjs-spec/jep-core
+- Core contract and implementation path: https://github.com/hjs-spec/jep-core#current-contract
 - JEP API: https://github.com/hjs-spec/jep-api
 - Python SDK: https://github.com/hjs-spec/sdk-py
 - JavaScript SDK: https://github.com/hjs-spec/sdk-js
